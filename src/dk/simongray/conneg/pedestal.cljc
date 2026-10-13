@@ -5,8 +5,7 @@
   route takes it as it is. Elsewhere, e.g. among the interceptors of a
   service, pass it to io.pedestal.interceptor/interceptor first."
   (:require [dk.simongray.conneg :as conneg]
-            [dk.simongray.conneg.impl.response :as response]
-            [dk.simongray.conneg.ring :as ring]))
+            [dk.simongray.conneg.impl.adapter :as adapter]))
 
 (defn negotiate
   "A Pedestal interceptor that negotiates the request by the `negotiation`,
@@ -17,17 +16,12 @@
   response to a 406, which ends the chain. On leave, it adds the fields
   that the decision looked at to the Vary header of the response.
 
-  The `opts` are:
-
-  - :not-acceptable, a function of the request and the decision that
-    returns the response when nothing is acceptable, e.g. a 406 of your
-    own. By default it's conneg/not-acceptable with the alternates of the
-    request."
+  The `opts` are those of dk.simongray.conneg.ring/wrap-negotiate:
+  :not-acceptable, :link? and :content-location?."
   ([negotiation]
    (negotiate negotiation {}))
   ([negotiation opts]
-   (let [refuse (or (:not-acceptable opts)
-                    (partial ring/not-acceptable negotiation))]
+   (let [refuse (adapter/refusal negotiation opts)]
      {:name  ::negotiate
       :enter (fn [{:keys [request] :as ctx}]
                (let [decision (conneg/negotiate negotiation request)
@@ -36,6 +30,10 @@
                    (:not-acceptable decision)
                    (assoc :response (refuse request decision)))))
       :leave (fn [{:keys [request response] :as ctx}]
-               (let [vary (get-in request [::conneg/decision :vary])]
-                 (cond-> ctx
-                   response (assoc :response (response/with-vary response vary)))))})))
+               (cond-> ctx
+                 response
+                 (assoc :response (adapter/finish negotiation
+                                                  opts
+                                                  request
+                                                  (::conneg/decision request)
+                                                  response))))})))

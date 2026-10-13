@@ -18,6 +18,10 @@ the Vary header that goes with them.
 - **Vary from what the choice looked at.** A query parameter such as
   ?format=turtle or a cookie can override a header, and the Vary header
   names exactly the headers that counted.
+- **The conventions of Linked Data.** Answer 303 See Other for things
+  that aren't documents, and name the representations of a document in
+  Link and Content-Location headers, as in
+  [Cool URIs for the Semantic Web](https://www.w3.org/TR/cooluris/).
 - **No header breaks it.** A malformed element is left out, and no
   function throws on anything that a client sends.
 - **The same results everywhere.** One codebase runs on the JVM, in Node
@@ -217,6 +221,86 @@ a route, pass it to `io.pedestal.interceptor/interceptor` first.
 Both take an option, :not-acceptable: a function of the request and the
 decision that returns a response of your own when nothing is acceptable.
 
+Linked Data
+-----------
+
+In [Cool URIs for the Semantic Web](https://www.w3.org/TR/cooluris/), a
+thing that isn't a document, e.g. a person, has a URI that answers 303 See
+Other with the URL of a document about it. To answer that way, use
+`conneg/see-other`, which adds the Vary of the decision when the document
+depends on it:
+
+```clojure
+(def thing
+  (conneg.ring/wrap-negotiate
+   (fn [{::conneg/keys [decision]}]
+     (conneg/see-other (if (= "text/html" (:media-type decision))
+                         "/people/alice"
+                         "/data/alice")
+                       decision))
+   {:media-type {:offers ["text/html" "application/rdf+xml"]}}))
+
+(thing {:uri "/id/alice" :headers {"accept" "application/rdf+xml"}})
+;; => {:status  303
+;;     :headers {"Location"     "/data/alice"
+;;               "Content-Type" "text/html;charset=utf-8"
+;;               "Vary"         "Accept"}
+;;     :body    "<!DOCTYPE html>..."}
+```
+
+The W3C's rule behind this, the httpRange-14 resolution of 2005, still
+stands, though many publishers answer such URIs with a 200 instead.
+
+For the documents themselves, the middleware and the interceptor take
+two more options:
+
+- :link?, for a Link header to each other representation, as Cool URIs
+  advises in section 4.6
+- :content-location?, for the URL of the representation that the request
+  got, as in section 4.2. The URL must pin down each dimension, since a
+  GET on it must return the same representation.
+
+```clojure
+(def app
+  (conneg.ring/wrap-negotiate handler negotiation {:link?             true
+                                                   :content-location? true}))
+
+(:headers (app {:uri "/word/1" :headers {"accept" "text/turtle" "accept-language" "da"}}))
+;; => {"Content-Type"     "text/turtle"
+;;     "Vary"             "Accept, Cookie, Accept-Language"
+;;     "Link"             "</word/1?format=html>; rel=\"alternate\"; type=\"text/html\", ..."
+;;     "Content-Location" "/word/1?format=turtle&lang=da"}
+```
+
+Only a successful response gets them. The functions behind them are
+`conneg/alternates`, `conneg/link-header` and `conneg/content-location`.
+
+By default, these URLs set the query parameters of the request, so they
+need a query parameter in each dimension. For URLs of your own, e.g. a
+file for each representation as in Cool URIs, give the negotiation an
+:href. It's a function of the request and a map of dimension to offer,
+which returns the URL of that representation or nil. The alternates ask
+for one dimension at a time, and Content-Location for all of them:
+
+```clojure
+(def extensions
+  {"text/html" "html" "application/rdf+xml" "rdf"})
+
+(defn file-href
+  "The URL of the file of the representation of the `request` with the
+  `offers`, e.g. /doc/alice.en.html."
+  [{:keys [uri] :as request} {:keys [media-type language] :as offers}]
+  (str uri
+       (when language (str "." language))
+       (when media-type (str "." (extensions media-type)))))
+
+(conneg/alternates {:media-type {:offers ["text/html" "application/rdf+xml"]}
+                    :href       file-href}
+                   {:uri "/doc/alice"})
+;; => [{:media-type "text/html" :href "/doc/alice.html"}
+;;     {:media-type "application/rdf+xml" :href "/doc/alice.rdf"}]
+```
+
 Choices that the standard leaves open
 -------------------------------------
 
@@ -307,7 +391,8 @@ ones are under `impl`:
 - `impl.ranking`, how the acceptable offers rank
 - `impl.request`, the query parameters and cookies of a request
 - `impl.negotiation`, the decision for a request and its alternates
-- `impl.response`, Vary, Link and the 406 response
+- `impl.response`, Vary, Link and the 303 and 406 responses
+- `impl.adapter`, what the middleware and the interceptor share
 
 License
 -------

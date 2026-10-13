@@ -119,20 +119,60 @@
            first)
       offer))
 
+(defn- with-query
+  "The URL of the Ring `request` with each of its query parameters in
+  `pairs` set to the value of the pair, relative to its origin."
+  [{:keys [uri query-string] :as request} pairs]
+  (str uri "?" (params/serialize (reduce (fn [query [name value]]
+                                           (params/set query name value))
+                                         (params/parse query-string)
+                                         pairs))))
+
+(defn query-href
+  "The URL of the representation of the Ring `request` with the `offers`,
+  a map of dimension to offer, by the query parameters of the
+  `negotiation`, or nil when a dimension of the offers has none."
+  [negotiation request offers]
+  (when (every? #(get-in negotiation [% :query]) (keys offers))
+    (with-query request
+                (for [[d offer] offers
+                      :let      [{:keys [query aliases]} (get negotiation d)]]
+                  [query (alias-of aliases offer)]))))
+
 (defn href
-  "The URL of the Ring `request` with its query parameter `name` set to
-  `value`, relative to its origin."
-  [{:keys [uri query-string] :as request} name value]
-  (str uri "?" (-> (params/parse query-string)
-                   (params/set name value)
-                   params/serialize)))
+  "The URL of the representation of the Ring `request` with the `offers`,
+  a map of dimension to offer, by the :href of the `negotiation` or else by
+  its query parameters, or nil."
+  [{f :href :as negotiation} request offers]
+  (if f
+    (f request offers)
+    (query-href negotiation request offers)))
 
 (defn alternates
   "The offers of the `negotiation` as alternates of the Ring `request`,
-  with an :href where the dimension of an offer has a query parameter."
+  each with an :href when it has a URL."
   [negotiation request]
   (vec (for [d     dimensions
-             :let  [{:keys [offers query aliases]} (get negotiation d)]
-             offer offers]
+             offer (get-in negotiation [d :offers])
+             :let  [url (href negotiation request {d offer})]]
          (cond-> {d offer}
-           query (assoc :href (href request query (alias-of aliases offer)))))))
+           url (assoc :href url)))))
+
+(defn others
+  "The `alternates` other than the offers that the `decision` chose."
+  [alternates decision]
+  (remove (fn [alternate]
+            (some #(and (contains? alternate %) (= (alternate %) (decision %)))
+                  dimensions))
+          alternates))
+
+;; RFC 9110, section 8.7: a GET on the URL returns the same representation,
+;; so the URL must pin down each dimension
+(defn content-location
+  "The URL of the representation that the `decision` chose for the Ring
+  `request` by the `negotiation`, or nil when it has none or nothing is
+  acceptable."
+  [negotiation request decision]
+  (let [ds (filter negotiation dimensions)]
+    (when (and (seq ds) (every? decision ds))
+      (href negotiation request (into {} (map (juxt identity decision)) ds)))))

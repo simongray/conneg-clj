@@ -39,17 +39,38 @@
     (or (some #(when (= k (syntax/lower %)) %) (keys headers))
         name)))
 
+(defn- header
+  "The value of the header `name` of the Ring `response` as one text, or
+  nil, and its key in the headers."
+  [response name]
+  (let [k     (header-key (:headers response) name)
+        value (get-in response [:headers k])]
+    [(if (coll? value) (str/join ", " value) value) k]))
+
 (defn with-vary
   "The Ring `response` with the field `names` added to its Vary header, or
   nil when it's nil."
   [response names]
   (when response
-    (let [k     (header-key (:headers response) "Vary")
-          value (get-in response [:headers k])
-          vary  (vary-header (if (coll? value) (str/join ", " value) value)
-                             names)]
+    (let [[value k] (header response "Vary")
+          vary      (vary-header value names)]
       (cond-> response
         vary (assoc-in [:headers k] vary)))))
+
+(defn with-link
+  "The Ring `response` with the Link value `s` added to its Link header."
+  [response s]
+  (let [[value k] (header response "Link")]
+    (cond-> response
+      s (assoc-in [:headers k] (if value (str value ", " s) s)))))
+
+(defn with-default
+  "The Ring `response` with the header `name` set to `value`, unless it has
+  that header or the value is nil."
+  [response name value]
+  (let [[old k] (header response name)]
+    (cond-> response
+      (and value (nil? old)) (assoc-in [:headers k] value))))
 
 ;; RFC 8288, section 3, where the type must be quoted (appendix C) and
 ;; holds no parameters (section 3.4.1)
@@ -117,3 +138,21 @@
                 vary (assoc "Vary" vary)
                 link (assoc "Link" link))
      :body    (not-acceptable-page alternates)}))
+
+;; RFC 9110, section 15.4.4: the body of a 303 to a GET ought to be a short
+;; hypertext note with a link to the location
+(defn see-other
+  "The 303 response that sends the request of the `decision` to the
+  `location`."
+  [location {:keys [vary] :as decision}]
+  (let [vary (vary-header nil vary)]
+    {:status  303
+     :headers (cond-> {"Location"     location
+                       "Content-Type" "text/html;charset=utf-8"}
+                vary (assoc "Vary" vary))
+     :body    (str "<!DOCTYPE html>\n"
+                   "<html lang=\"en\">\n"
+                   "<meta charset=\"utf-8\">\n"
+                   "<title>See Other</title>\n"
+                   "<p>See <a href=\"" (escape location) "\">"
+                   (escape location) "</a>.\n")}))

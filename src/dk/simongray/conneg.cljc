@@ -113,8 +113,13 @@
   A query parameter or cookie holds an alias or what the field would hold,
   e.g. turtle or text/turtle, and a query parameter decides even when no
   offer matches it. A cookie that matches no offer counts as missing.
-  The :vary of the `negotiation` lists other fields that your response
-  depends on, e.g. Origin.
+
+  Beside the dimensions, the `negotiation` takes:
+
+  - :vary, other fields that your response depends on, e.g. Origin
+  - :href, a function of the request and a map of dimension to offer that
+    returns the URL of that representation, or nil, for alternates and
+    content-location. By default the URL sets the query parameters.
 
   The decision holds the offer chosen in each dimension. When none is
   acceptable and the dimension has no :default, its :not-acceptable set
@@ -135,7 +140,8 @@
       ;; => [{:media-type \"text/html\" :href \"/word/1?lang=da&format=text%2Fhtml\"}
       ;;     {:media-type \"text/turtle\" :href \"/word/1?lang=da&format=turtle\"}]
 
-  An alternate has an :href when its dimension has a query parameter: the
+  An alternate has an :href when it has a URL: by the :href function of
+  the `negotiation`, or else when its dimension has a query parameter, the
   URL of the request with the parameter set to the shortest alias of the
   offer, or to the offer itself."
   [negotiation request]
@@ -164,6 +170,43 @@
   request with other Accept fields might succeed."
   [decision alternates]
   (response/not-acceptable decision alternates))
+
+;; RFC 9110, section 8.7
+(defn content-location
+  "The URL of the representation that the `decision` chose for the Ring
+  `request` by the `negotiation`, or nil when it has none.
+
+      (content-location {:media-type {:offers  [\"text/html\" \"text/turtle\"]
+                                      :query   \"format\"
+                                      :aliases {\"turtle\" \"text/turtle\"}}
+                         :language   {:offers [\"da\" \"en\"] :query \"lang\"}}
+                        {:uri \"/word/1\"}
+                        {:media-type \"text/turtle\" :language \"da\"})
+      ;; => \"/word/1?format=turtle&lang=da\"
+
+  A GET on the URL must return the same representation, so the URL pins
+  down each dimension: by the :href function of the `negotiation`, or else
+  by a query parameter for each dimension."
+  [negotiation request decision]
+  (negotiation/content-location negotiation request decision))
+
+;; RFC 9110, section 15.4.4, and Cool URIs for the Semantic Web, sections
+;; 4.2 and 4.3
+(defn see-other
+  "The 303 See Other response that sends the request of the `decision` to
+  the `location`, e.g. from a thing to a document about it.
+
+      (see-other \"/doc/alice\" {:media-type \"text/html\" :vary [\"Accept\"]})
+      ;; => {:status  303
+      ;;     :headers {\"Location\"     \"/doc/alice\"
+      ;;               \"Content-Type\" \"text/html;charset=utf-8\"
+      ;;               \"Vary\"         \"Accept\"}
+      ;;     :body    \"<!DOCTYPE html>...\"}
+
+  It has the Vary field of the decision, since the location may depend on
+  it, and a short HTML note with a link to the location."
+  [location decision]
+  (response/see-other location decision))
 
 ;; RFC 9110, section 12.5.5
 (defn vary-header

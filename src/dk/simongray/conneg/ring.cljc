@@ -2,13 +2,7 @@
   "Ring middleware that negotiates each request before the handler gets
   it."
   (:require [dk.simongray.conneg :as conneg]
-            [dk.simongray.conneg.impl.response :as response]))
-
-(defn not-acceptable
-  "The 406 response to the Ring `request` of the `decision` by the
-  `negotiation`, which lists the alternates of the request."
-  [negotiation request decision]
-  (conneg/not-acceptable decision (conneg/alternates negotiation request)))
+            [dk.simongray.conneg.impl.adapter :as adapter]))
 
 (defn wrap-negotiate
   "Ring middleware that negotiates each request by the `negotiation` before
@@ -25,26 +19,29 @@
     returns the response when nothing is acceptable, e.g. a 406 of your
     own. By default it's conneg/not-acceptable with the alternates of the
     request.
+  - :link?, to add a Link to each other representation to a successful
+    response, with rel=\"alternate\"
+  - :content-location?, to add the URL of the chosen representation to a
+    successful response, when a query parameter pins down each dimension
 
   It takes a synchronous or an asynchronous handler."
   ([handler negotiation]
    (wrap-negotiate handler negotiation {}))
   ([handler negotiation opts]
-   (let [refuse    (or (:not-acceptable opts)
-                       (partial not-acceptable negotiation))
+   (let [refuse    (adapter/refusal negotiation opts)
          negotiate (fn [request]
                      (let [decision (conneg/negotiate negotiation request)]
-                       [(assoc request ::conneg/decision decision) decision]))]
+                       [(assoc request ::conneg/decision decision) decision]))
+         finish    (partial adapter/finish negotiation opts)]
      (fn
        ([request]
         (let [[request decision] (negotiate request)]
-          (response/with-vary (if (:not-acceptable decision)
-                                (refuse request decision)
-                                (handler request))
-                              (:vary decision))))
+          (finish request decision (if (:not-acceptable decision)
+                                     (refuse request decision)
+                                     (handler request)))))
        ([request respond raise]
-        (let [[request {:keys [vary] :as decision}] (negotiate request)
-              respond #(respond (response/with-vary % vary))]
+        (let [[request decision] (negotiate request)
+              respond #(respond (finish request decision %))]
           (if (:not-acceptable decision)
             (respond (refuse request decision))
             (handler request respond raise))))))))
