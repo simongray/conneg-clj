@@ -26,9 +26,29 @@
    "application/sparql-results+json" "application/json"
    "application/transit+json"])
 
+(def negotiation
+  "A negotiation like DanNet's, with overrides in both dimensions."
+  {:media-type {:offers  media-types
+                :query   "format"
+                :aliases {"html" "text/html" "turtle" "text/turtle"}}
+   :language   {:offers  ["da" "en"]
+                :default "en"
+                :query   "lang"
+                :cookie  "languages"}})
+
+(def request
+  "A Ring request from a browser, with a cookie and a query string."
+  {:uri          "/dannet/data/synset-1"
+   :query-string "x=1"
+   :headers      {"accept"          accept
+                  "accept-language" accept-language
+                  "cookie"          "theme=dark; detail=high"}})
+
 (def cases
   "Each case by name, as a function to time."
   {:media-ranges      #(conneg/media-ranges accept)
+   :negotiate         #(conneg/negotiate negotiation request)
+   :alternates        #(conneg/alternates negotiation request)
    :media-type        #(conneg/media-type accept media-types)
    :media-type-api    #(conneg/media-type "application/ld+json" media-types)
    :media-type-absent #(conneg/media-type nil media-types)

@@ -78,3 +78,41 @@
             (gen/vector (gen/frequency [[8 (gen/elements (seq "a/*;=q0.1, \"\\-"))]
                                         [1 gen/char]])
                         0 30)))
+
+(def query-string
+  "A query string with format and lang parameters, or nil."
+  (gen/one-of [(gen/return nil)
+               text
+               (gen/fmap (fn [[format lang]]
+                           (str/join "&" (remove nil? [(some->> format (str "format="))
+                                                        (some->> lang (str "lang="))])))
+                         (gen/tuple (gen/one-of [(gen/return nil)
+                                                 (gen/elements ["turtle" "html" "xml" ""
+                                                                "text/turtle" "text%2F*"
+                                                                "%zz" "a+b"])
+                                                 text])
+                                    (gen/one-of [(gen/return nil)
+                                                 (gen/elements ["da" "en-GB" "fr" "*" ""])
+                                                 text])))]))
+
+(def cookie
+  "A Cookie value with a lang cookie, or nil."
+  (gen/one-of [(gen/return nil)
+               text
+               (gen/fmap #(str "x=1; lang=" %)
+                         (gen/one-of [(gen/elements ["da" "en" "fr" "\"en\"" "%64a"])
+                                      text]))]))
+
+(def request
+  "A Ring request with random fields, query parameters and cookies."
+  (gen/fmap (fn [[query-string accept accept-language cookie]]
+              {:uri          "/"
+               :query-string query-string
+               :headers      (cond-> {}
+                               accept          (assoc "accept" accept)
+                               accept-language (assoc "accept-language" accept-language)
+                               cookie          (assoc "cookie" cookie))})
+            (gen/tuple query-string
+                       (gen/one-of [(gen/return nil) accept text])
+                       (gen/one-of [(gen/return nil) accept-language text])
+                       cookie)))

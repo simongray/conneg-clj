@@ -6,7 +6,8 @@ conneg-clj
 This library implements proactive content negotiation by
 [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#section-12) in Clojure
 and ClojureScript. Use it to pick the media type and the language of a
-response from the Accept and Accept-Language headers of a request.
+response from the Accept and Accept-Language headers of a request, with
+the Vary header that goes with them.
 
 - **Languages that fall back.** A browser that asks for da-DK gets your
   Danish page, though you only have da. Safari sends a single language,
@@ -14,6 +15,9 @@ response from the Accept and Accept-Language headers of a request.
 - **Weights as RFC 9110 has them.** The most specific range decides, so
   `text/*, text/html;q=0` rules out HTML but accepts other text. A weight
   of 0 always rules an offer out.
+- **Vary from what the choice looked at.** A query parameter such as
+  ?format=turtle or a cookie can override a header, and the Vary header
+  names exactly the headers that counted.
 - **No header breaks it.** A malformed element is left out, and no
   function throws on anything that a client sends.
 - **The same results everywhere.** One codebase runs on the JVM, in Node
@@ -103,6 +107,66 @@ The function also takes a coll of ranges, e.g. `js/navigator.languages`
 in a browser. For other ways to match language tags, see
 [langtag-clj](https://github.com/simongray/langtag-clj).
 
+Negotiating a request
+---------------------
+
+For a whole Ring request, say what you offer in each dimension and pass
+the request to `conneg/negotiate`. Pedestal's requests work too, since
+they are Ring requests:
+
+```clojure
+(def negotiation
+  {:media-type {:offers  ["text/html" "application/ld+json" "text/turtle"]
+                :query   "format"
+                :aliases {"html"    "text/html"
+                          "json-ld" "application/ld+json"
+                          "turtle"  "text/turtle"}}
+   :language   {:offers  ["da" "en"]
+                :default "en"
+                :query   "lang"
+                :cookie  "lang"}})
+
+(conneg/negotiate negotiation {:uri     "/word/1"
+                               :headers {"accept"          "text/turtle, */*;q=0.1"
+                                         "accept-language" "da-DK"}})
+;; => {:media-type "text/turtle"
+;;     :language   "da"
+;;     :vary       ["Accept" "Cookie" "Accept-Language"]}
+```
+
+A query parameter overrides the header, e.g. ?format=turtle or
+?lang=da-DK, and a cookie does so when no query parameter is there. Both
+hold an alias or what the header would hold. A cookie can be a map of its
+:name and a :read function, for a value in a format of your own.
+
+The :vary of the decision lists the headers that the choice looked at,
+also when they were missing, so put it in the Vary header of your
+response. A query parameter is part of the URL, so it never goes in Vary,
+and once the cookie decides, the header that it overrides doesn't either.
+The :vary of the negotiation adds headers of your own, e.g. Origin. To
+merge a Vary value with others, use `conneg/vary-header`.
+
+When nothing is acceptable in a dimension with no :default, the decision
+lists the dimension under :not-acceptable. A query parameter that matches
+no offer has that effect too, e.g. ?format=xml, while a cookie that
+matches no offer counts as missing. Answer with `conneg/not-acceptable`,
+which lists the alternatives:
+
+```clojure
+(let [request  {:uri "/word/1" :query-string "format=xml"}
+      decision (conneg/negotiate negotiation request)]
+  (conneg/not-acceptable decision (conneg/alternates negotiation request)))
+;; => {:status  406
+;;     :headers {"Content-Type" "text/html;charset=utf-8"
+;;               "Vary"         "Cookie, Accept-Language"
+;;               "Link"         "</word/1?format=html>; rel=\"alternate\"; type=\"text/html\", ..."}
+;;     :body    "<!DOCTYPE html>..."}
+```
+
+The alternates are your offers, with the URL of each where its dimension
+has a query parameter. The page and the Link header list the media types
+here, since the language was fine.
+
 Choices that the standard leaves open
 -------------------------------------
 
@@ -188,6 +252,9 @@ The public namespace is the root. The internal ones are under `impl`:
 - `impl.media`, media ranges and how they match
 - `impl.language`, how language ranges match tags
 - `impl.ranking`, how the acceptable offers rank
+- `impl.request`, the query parameters and cookies of a request
+- `impl.negotiation`, the decision for a request and its alternates
+- `impl.response`, Vary, Link and the 406 response
 
 License
 -------

@@ -9,7 +9,8 @@
             [dk.simongray.conneg.impl.language :as language]
             [dk.simongray.conneg.impl.media :as media]
             [dk.simongray.conneg.impl.syntax :as syntax]
-            [dk.simongray.whatwg-mime :as mime]))
+            [dk.simongray.whatwg-mime :as mime]
+            [dk.simongray.whatwg-url.params :as params]))
 
 (defspec any-text-picks-an-offer-or-nil 2000
   (prop/for-all [s      (gen/one-of [g/text g/accept g/accept-language])
@@ -57,3 +58,28 @@
     (and (= (conneg/language s1 offers) (conneg/language (change s1) offers))
          (= (conneg/media-type s2 ["image/png" "text/html"])
             (conneg/media-type (change s2) ["image/png" "text/html"])))))
+
+(def negotiation
+  "A negotiation with overrides in both dimensions."
+  {:media-type {:offers  ["text/html" "text/turtle"]
+                :query   "format"
+                :aliases {"turtle" "text/turtle"}}
+   :language   {:offers  ["da" "en-GB"]
+                :default "da"
+                :query   "lang"
+                :cookie  "lang"}})
+
+(defspec any-request-gets-a-decision 3000
+  (prop/for-all [request g/request]
+    (let [{:keys [media-type language vary not-acceptable] :as decision}
+          (conneg/negotiate negotiation request)
+          query (some-> (:query-string request) params/parse)]
+      (and (or (nil? media-type) (some #{media-type} ["text/html" "text/turtle"]))
+           (some #{language} ["da" "en-GB"])
+           (= (some? not-acceptable) (nil? media-type))
+           (if (not-empty (params/get query "format"))
+             (not (some #{"Accept"} vary))
+             (some #{"Accept"} vary))
+           (if (not-empty (params/get query "lang"))
+             (empty? (remove #{"Accept"} vary))
+             (some #{"Cookie"} vary))))))

@@ -1,11 +1,12 @@
 {:paths ["src"]
 
  ;; Clojure 1.11 is the floor, and the tests run on it unless an alias says
- ;; otherwise. langtag-clj matches language ranges, and whatwg-mime parses
- ;; media types.
+ ;; otherwise. langtag-clj matches language ranges, whatwg-mime parses
+ ;; media types, and whatwg-url reads and writes query strings.
  :deps  {org.clojure/clojure      {:mvn/version "1.11.4"}
          dk.simongray/langtag-clj {:mvn/version "0.1.0"}
-         dk.simongray/whatwg-mime {:mvn/version "0.2.0"}}
+         dk.simongray/whatwg-mime {:mvn/version "0.2.0"}
+         dk.simongray/whatwg-url  {:mvn/version "0.1.0"}}
 
  :aliases
  {;; clojure -X:test  (test.check makes the random input of the generative
