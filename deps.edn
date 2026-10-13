@@ -18,6 +18,13 @@
          :main-opts   ["-m" "cognitect.test-runner"]
          :exec-fn     cognitect.test-runner.api/test}
 
+  ;; clojure -X:test:pedestal  (also the interceptor in Pedestal's own
+  ;; chain, which needs Java 17 and Clojure 1.12)
+  :pedestal {:extra-paths   ["test-pedestal"]
+             :override-deps {org.clojure/clojure {:mvn/version "1.12.5"}}
+             :extra-deps    {io.pedestal/pedestal.interceptor {:mvn/version "0.8.2"}}
+             :exec-args     {:dirs ["test" "test-pedestal"]}}
+
   ;; clojure -M:cljs compile test  (the tests in Node)
   :cljs {:extra-paths   ["test" "dev"]
          :override-deps {org.clojure/clojure {:mvn/version "1.12.5"}}

@@ -37,6 +37,9 @@ jobs:
       - name: JVM tests
         run: clojure -X:test
 
+      - name: JVM tests with Pedestal's interceptor chain
+        run: clojure -X:test:pedestal
+
       # The build runs the tests itself, but exits 0 when one fails, so
       # node runs the built file, and its exit code fails the step.
       - name: Node tests
@@ -51,7 +54,7 @@ jobs:
           node target/node-tests.js
 
       - name: Lint
-        run: clojure -Sdeps '{:deps {clj-kondo/clj-kondo {:mvn/version "2026.08.04"}}}' -M -m clj-kondo.main --lint src test dev
+        run: clojure -Sdeps '{:deps {clj-kondo/clj-kondo {:mvn/version "2026.08.04"}}}' -M -m clj-kondo.main --lint src test test-pedestal dev
 
   floor:
     name: Java 11

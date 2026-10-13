@@ -31,6 +31,26 @@
            not-empty
            (str/join ", ")))
 
+(defn- header-key
+  "The key of the header `name` in the Ring `headers`, which may differ in
+  case, or else the name."
+  [headers name]
+  (let [k (syntax/lower name)]
+    (or (some #(when (= k (syntax/lower %)) %) (keys headers))
+        name)))
+
+(defn with-vary
+  "The Ring `response` with the field `names` added to its Vary header, or
+  nil when it's nil."
+  [response names]
+  (when response
+    (let [k     (header-key (:headers response) "Vary")
+          value (get-in response [:headers k])
+          vary  (vary-header (if (coll? value) (str/join ", " value) value)
+                             names)]
+      (cond-> response
+        vary (assoc-in [:headers k] vary)))))
+
 ;; RFC 8288, section 3, where the type must be quoted (appendix C) and
 ;; holds no parameters (section 3.4.1)
 (defn link

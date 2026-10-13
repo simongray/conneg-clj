@@ -167,6 +167,56 @@ The alternates are your offers, with the URL of each where its dimension
 has a query parameter. The page and the Link header list the media types
 here, since the language was fine.
 
+Ring and Pedestal
+-----------------
+
+The Ring middleware negotiates each request before your handler gets it:
+
+```clojure
+(require '[dk.simongray.conneg.ring :as conneg.ring])
+
+(defn handler
+  "Answer with the language that the client gets, in the media type that
+  it gets."
+  [{::conneg/keys [decision]}]
+  {:status  200
+   :headers {"Content-Type" (:media-type decision)}
+   :body    (str "Language: " (:language decision))})
+
+(def app
+  (conneg.ring/wrap-negotiate handler negotiation))
+
+(app {:uri "/word/1" :headers {"accept" "text/turtle" "accept-language" "da"}})
+;; => {:status  200
+;;     :headers {"Content-Type" "text/turtle"
+;;               "Vary"         "Accept, Cookie, Accept-Language"}
+;;     :body    "Language: da"}
+```
+
+The handler finds the decision in the request, under
+:dk.simongray.conneg/decision. When nothing is acceptable, the middleware
+answers 406 itself. It adds the headers that the decision looked at to the
+Vary header of every response, next to any that the handler sets. It
+takes synchronous and asynchronous handlers.
+
+For Pedestal, put the interceptor in a route:
+
+```clojure
+(require '[dk.simongray.conneg.pedestal :as conneg.pedestal])
+
+(def routes
+  #{["/word/:id" :get [(conneg.pedestal/negotiate negotiation) word-handler]
+     :route-name ::word]})
+```
+
+On enter, it puts the decision in the request, or it sets a 406 response,
+which ends the chain. On leave, it adds to the Vary header. The
+interceptor is a map, so the library doesn't depend on Pedestal. Outside
+a route, pass it to `io.pedestal.interceptor/interceptor` first.
+
+Both take an option, :not-acceptable: a function of the request and the
+decision that returns a response of your own when nothing is acceptable.
+
 Choices that the standard leaves open
 -------------------------------------
 
@@ -235,6 +285,7 @@ Development
 
 ```bash
 clojure -X:test                                       # the tests on the JVM
+clojure -X:test:pedestal                              # also in Pedestal's chain
 npm install                                           # once, for the Node tests
 clojure -M:cljs compile test                          # the tests in Node
 clojure -M:bench -m dk.simongray.conneg.bench         # benchmarks on the JVM
@@ -242,11 +293,13 @@ clojure -M:cljs release bench && node target/bench.js # benchmarks in Node
 dev/negotiator.sh                                     # records negotiator's tests again
 ```
 
-The cases of jshttp/negotiator come from its own test suite at a pinned
-version, which `dev/negotiator.sh` runs and records. They keep its MIT
-notice.
+The alias :pedestal also runs the interceptor in the chain of Pedestal
+0.8, which needs Java 17. The cases of jshttp/negotiator come from its
+own test suite at a pinned version, which `dev/negotiator.sh` runs and
+records. They keep its MIT notice.
 
-The public namespace is the root. The internal ones are under `impl`:
+The public namespaces are the root, `ring` and `pedestal`. The internal
+ones are under `impl`:
 
 - `impl.syntax`, the lists and weights of RFC 9110
 - `impl.media`, media ranges and how they match
