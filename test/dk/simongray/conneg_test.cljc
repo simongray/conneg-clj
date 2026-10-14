@@ -78,6 +78,15 @@
     (is (= [{:type "text" :subtype "html" :weight 1.0}]
            (conneg/media-ranges [{:type "Text" :subtype "HTML"}])))))
 
+(deftest language-ranges
+  (is (= [{:range "da-dk" :weight 1.0} {:range "en" :weight 0.8}]
+         (conneg/language-ranges "en;q=0.8, da-DK")))
+  (testing "repeats are left out"
+    (is (= [{:range "de" :weight 1.0}] (conneg/language-ranges "de, DE"))))
+  (testing "a coll of ranges, without nil"
+    (is (= [{:range "de" :weight 1.0} {:range "en" :weight 1.0}]
+           (conneg/language-ranges ["de" nil "en"])))))
+
 (deftest language
   (doseq [[accept-language expected] [["da-DK" "da"]
                                       ["da-DK, en;q=0.8" "da"]

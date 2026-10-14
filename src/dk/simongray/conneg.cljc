@@ -84,6 +84,19 @@
   ([accept-language f coll]
    (first (language/ranked accept-language f coll))))
 
+;; RFC 9110, section 12.5.4
+(defn language-ranges
+  "The language ranges of `x`, an Accept-Language value or a coll of
+  ranges, in order of weight.
+
+      (language-ranges \"en;q=0.8, da-DK\")
+      ;; => [{:range \"da-dk\" :weight 1.0} {:range \"en\" :weight 0.8}]
+
+  A range is a map of the :range in lower case and its :weight. Ranges that
+  don't follow the grammar, or that repeat an earlier one, are left out."
+  [x]
+  (language/priority-list x))
+
 ;; RFC 9110, sections 12.1, 12.4.1 and 12.5.5
 (defn negotiate
   "The media type and language of the response to the Ring `request`, by
@@ -96,9 +109,10 @@
                                :cookie  \"lang\"}}
                  {:headers {\"accept\"          \"text/turtle\"
                             \"accept-language\" \"da-DK\"}})
-      ;; => {:media-type \"text/turtle\"
-      ;;     :language   \"da\"
-      ;;     :vary       [\"Accept\" \"Cookie\" \"Accept-Language\"]}
+      ;; => {:media-type  \"text/turtle\"
+      ;;     :language    \"da\"
+      ;;     :preferences {:media-type \"text/turtle\" :language \"da-DK\"}
+      ;;     :vary        [\"Accept\" \"Cookie\" \"Accept-Language\"]}
 
   The `negotiation` maps :media-type and :language to a map of these:
 
@@ -127,7 +141,12 @@
   acceptable and the dimension has no :default, its :not-acceptable set
   holds the dimension instead. Its :vary lists the fields that the choice
   looked at, also when they were missing, but never a query parameter,
-  since that is part of the URL."
+  since that is part of the URL.
+
+  Its :preferences maps each dimension to the preference that decided it:
+  the query parameter, the cookie's value or the field, with an alias
+  replaced by its offer. Pass it to media-type or language to choose other
+  things by the same preference, e.g. the labels of a page."
   [negotiation request]
   (negotiation/negotiate negotiation request))
 

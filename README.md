@@ -112,7 +112,8 @@ and zh-Hant-TW to zh-Hant and then zh. The range `*` only covers tags
 that no other range matches.
 
 The function also takes a coll of ranges, e.g. `js/navigator.languages`
-in a browser. For other ways to match language tags, see
+in a browser. To parse an Accept-Language header into language ranges, use
+`conneg/language-ranges`. For other ways to match language tags, see
 [langtag-clj](https://github.com/simongray/langtag-clj).
 
 Negotiating a request
@@ -138,9 +139,10 @@ requests are Ring requests, so they work too:
                   {:uri     "/word/1"
                    :headers {"accept"          "text/turtle, */*;q=0.1"
                              "accept-language" "da-DK"}})
-;; => {:media-type "text/turtle"
-;;     :language   "da"
-;;     :vary       ["Accept" "Cookie" "Accept-Language"]}
+;; => {:media-type  "text/turtle"
+;;     :language    "da"
+;;     :preferences {:media-type "text/turtle, */*;q=0.1" :language "da-DK"}
+;;     :vary        ["Accept" "Cookie" "Accept-Language"]}
 ```
 
 A query parameter such as ?format=turtle or ?lang=da-DK overrides the
@@ -155,6 +157,11 @@ is part of the URL, so it never goes in Vary. When a cookie decides, the
 header that it overrides doesn't go in either. To add headers of your
 own, e.g. Origin, give the negotiation a :vary. To merge Vary values, use
 `conneg/vary-header`.
+
+The decision's :preferences holds what decided each dimension, also when
+no offer matched it, e.g. de for ?lang=de. To choose other things by the
+same preference, pass it to `conneg/language` or `conneg/media-type`, e.g.
+to show German labels wherever a page has them.
 
 When nothing is acceptable in a dimension without a :default, the
 decision lists that dimension under :not-acceptable. A query parameter

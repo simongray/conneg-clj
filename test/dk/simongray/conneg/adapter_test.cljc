@@ -41,9 +41,10 @@
       (is (= {:status  200
               :headers {"Content-Type" "text/turtle"
                         "vary"         "Origin, Accept, Cookie, Accept-Language"}
-              :body    {:media-type "text/turtle"
-                        :language   "da"
-                        :vary       ["Accept" "Cookie" "Accept-Language"]}}
+              :body    {:media-type  "text/turtle"
+                        :language    "da"
+                        :preferences {:media-type "text/turtle" :language "da-DK"}
+                        :vary        ["Accept" "Cookie" "Accept-Language"]}}
              response))))
   (testing "a 406 with the alternates"
     (let [app     (conneg.ring/wrap-negotiate handler negotiation)
@@ -60,6 +61,7 @@
       (is (= {:status  406
               :headers {"Vary" "Cookie, Accept-Language"}
               :body    {:language       "da"
+                        :preferences    {:media-type "xml"}
                         :vary           ["Cookie" "Accept-Language"]
                         :not-acceptable #{:media-type}}}
              (app {:uri "/x" :query-string "format=xml"})))))
@@ -83,9 +85,10 @@
     (is (= {:status  200
             :headers {"Content-Type" "text/turtle"
                       "vary"         "Origin, Cookie, Accept-Language"}
-            :body    {:media-type "text/turtle"
-                      :language   "en"
-                      :vary       ["Cookie" "Accept-Language"]}}
+            :body    {:media-type  "text/turtle"
+                      :language    "en"
+                      :preferences {:media-type "text/turtle" :language "en"}
+                      :vary        ["Cookie" "Accept-Language"]}}
            (:response (run-interceptor interceptor handler
                                        {:uri          "/"
                                         :query-string "format=turtle"

@@ -38,7 +38,9 @@
 (deftest chain
   (is (= {:status  200
           :headers {"Vary" "Origin, Accept"}
-          :body    {:media-type "text/turtle" :vary ["Accept"]}}
+          :body    {:media-type  "text/turtle"
+                    :preferences {:media-type "text/turtle"}
+                    :vary        ["Accept"]}}
          (run {:headers {"accept" "text/turtle"}}
               (conneg.pedestal/negotiate negotiation)
               handler)))

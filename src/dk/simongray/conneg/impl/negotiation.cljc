@@ -5,7 +5,8 @@
 
   A negotiation is a map of each dimension (:media-type or :language) to
   what the server offers in it, plus :vary. A decision is a map of each
-  dimension to the offer chosen in it, plus :vary and :not-acceptable."
+  dimension to the offer chosen in it, plus :vary, :preferences and
+  :not-acceptable."
   (:require [dk.simongray.conneg.impl.language :as language]
             [dk.simongray.conneg.impl.media :as media]
             [dk.simongray.conneg.impl.request :as request]
@@ -48,6 +49,11 @@
       (some #{aliased} offers) aliased
       (seq (preferences d x))  (first (ranked d x offers)))))
 
+(defn unalias
+  "The offer that `x` is an alias of in the `dimension`, or else `x`."
+  [{:keys [aliases] :as dimension} x]
+  (get aliases x x))
+
 (defn cookie-value
   "The value of the `cookie` of the Ring `request`, read by the :read of
   the cookie, or nil when it's missing or the :read throws or returns
@@ -69,50 +75,57 @@
 ;; so it never goes in Vary.
 (defn decide
   "The choice for the Ring `request` in the dimension `d`, by the offers
-  and overrides in `dimension`, and the fields that it depended on.
+  and overrides in `dimension`, with the preference that decided it and the
+  fields that it depended on.
 
   A query parameter decides first, then the cookie and then the field. The
   choice is nil when nothing is acceptable, and a cookie whose value
-  matches no offer counts as missing."
+  matches no offer counts as missing. In the preference, an alias is
+  replaced by its offer."
   [d {:keys [offers query cookie] :as dimension} request]
   (let [field        (fields d)
+        header       (get-in request [:headers (syntax/lower field)])
         query-value  (some->> query (request/query-param request) not-empty)
-        cookie-offer (when (and cookie (not query-value))
-                       (some->> (cookie-value request cookie)
-                                (override d dimension)))]
+        cookie-pref  (when (and cookie (not query-value))
+                       (cookie-value request cookie))
+        cookie-offer (some->> cookie-pref (override d dimension))]
     (cond
       query-value
-      {:choice (override d dimension query-value)
-       :vary   []}
+      {:choice     (override d dimension query-value)
+       :preference (unalias dimension query-value)
+       :vary       []}
 
       cookie-offer
-      {:choice cookie-offer
-       :vary   ["Cookie"]}
+      {:choice     cookie-offer
+       :preference (unalias dimension cookie-pref)
+       :vary       ["Cookie"]}
 
       :else
-      {:choice (first (ranked d (get-in request [:headers (syntax/lower field)])
-                              offers))
-       :vary   (cond-> [] cookie (conj "Cookie") :always (conj field))})))
+      {:choice     (first (ranked d header offers))
+       :preference header
+       :vary       (cond-> [] cookie (conj "Cookie") :always (conj field))})))
 
 ;; RFC 9110, section 12.4.1: when nothing is acceptable, a server either
 ;; answers 406 or ignores the field, which a :default stands for
 (defn negotiate
   "The decision of the `negotiation` for the Ring `request`."
   [{:keys [vary] :as negotiation} request]
-  (let [decided (for [d     dimensions
-                      :let  [dimension (get negotiation d)]
-                      :when dimension]
-                  (let [decision (decide d dimension request)]
-                    (assoc decision
-                      :dimension d
-                      :choice (or (:choice decision) (:default dimension)))))
-        missing (set (keep #(when-not (:choice %) (:dimension %)) decided))]
-    (cond-> (into {}
-                  (keep #(when (:choice %) [(:dimension %) (:choice %)]))
-                  decided)
-      :always       (assoc :vary (response/merge-fields
-                                  (concat (mapcat :vary decided) vary)))
-      (seq missing) (assoc :not-acceptable missing))))
+  (let [decided      (for [d     dimensions
+                           :let  [dimension (get negotiation d)]
+                           :when dimension]
+                       (let [decision (decide d dimension request)]
+                         (assoc decision
+                           :dimension d
+                           :choice (or (:choice decision) (:default dimension)))))
+        by-dimension (fn [k]
+                       (into {} (keep #(some->> (k %) (vector (:dimension %)))) decided))
+        preferences  (by-dimension :preference)
+        missing      (set (keep #(when-not (:choice %) (:dimension %)) decided))]
+    (cond-> (by-dimension :choice)
+      :always           (assoc :vary (response/merge-fields
+                                      (concat (mapcat :vary decided) vary)))
+      (seq preferences) (assoc :preferences preferences)
+      (seq missing)     (assoc :not-acceptable missing))))
 
 (defn alias-of
   "The shortest of the `offer` and its `aliases`, or the first in

@@ -24,9 +24,10 @@
   {:uri "/word/1" :query-string query-string :headers headers})
 
 (deftest fields
-  (is (= {:media-type "text/turtle"
-          :language   "da"
-          :vary       ["Accept" "Cookie" "Accept-Language"]}
+  (is (= {:media-type  "text/turtle"
+          :language    "da"
+          :preferences {:media-type "text/turtle" :language "da-DK"}
+          :vary        ["Accept" "Cookie" "Accept-Language"]}
          (conneg/negotiate negotiation (req nil {"accept"          "text/turtle"
                                                  "accept-language" "da-DK"}))))
   (testing "missing fields mean no preference, but count for Vary"
@@ -40,6 +41,7 @@
 
 (deftest not-acceptable-or-default
   (is (= {:language       "en"
+          :preferences    {:media-type "image/png" :language "fr"}
           :vary           ["Accept" "Cookie" "Accept-Language"]
           :not-acceptable #{:media-type}}
          (conneg/negotiate negotiation (req nil {"accept"          "image/png"
@@ -56,9 +58,10 @@
       (is (= media-type (:media-type (conneg/negotiate negotiation (req query-string {}))))
           query-string)))
   (testing "Vary leaves out what the URL decides"
-    (is (= {:media-type "text/turtle"
-            :language   "da"
-            :vary       []}
+    (is (= {:media-type  "text/turtle"
+            :language    "da"
+            :preferences {:media-type "text/turtle" :language "da-DK"}
+            :vary        []}
            (conneg/negotiate negotiation (req "format=turtle&lang=da-DK"
                                               {"accept" "text/html"})))))
   (testing "no Vary when the URL decides it all"
@@ -78,14 +81,18 @@
 
 (deftest cookies
   (testing "a cookie decides when no query parameter does"
-    (is (= {:media-type "text/html" :language "en" :vary ["Accept" "Cookie"]}
+    (is (= {:media-type  "text/html"
+            :language    "en"
+            :preferences {:language "en"}
+            :vary        ["Accept" "Cookie"]}
            (conneg/negotiate negotiation (req nil {"cookie"          "x=1; lang=en"
                                                    "accept-language" "da"}))))
     (is (= "da" (:language (conneg/negotiate negotiation (req "lang=da" {"cookie" "lang=en"}))))))
   (testing "a cookie that matches no offer counts as missing"
-    (is (= {:media-type "text/html"
-            :language   "da"
-            :vary       ["Accept" "Cookie" "Accept-Language"]}
+    (is (= {:media-type  "text/html"
+            :language    "da"
+            :preferences {:language "da"}
+            :vary        ["Accept" "Cookie" "Accept-Language"]}
            (conneg/negotiate negotiation (req nil {"cookie"          "lang=fr"
                                                    "accept-language" "da"})))))
   (testing "Ring's :cookies when a middleware has parsed them"
@@ -111,6 +118,20 @@
         (let [negotiation (assoc-in negotiation [:language :cookie :read] vector)]
           (is (= "en" (:language (conneg/negotiate negotiation
                                                    (req nil {"cookie" "languages=en"}))))))))))
+
+(deftest preferences
+  (testing "the preference that decided, with an alias replaced by its offer"
+    (is (= {:media-type "text/turtle" :language "de"}
+           (:preferences (conneg/negotiate negotiation (req "format=ttl&lang=de"
+                                                            {"accept" "text/html"}))))))
+  (testing "also when no offer matches it"
+    (is (= "en" (:language (conneg/negotiate negotiation (req "lang=de" {}))))))
+  (testing "the cookie or the field"
+    (is (= {:media-type "text/*" :language "en"}
+           (:preferences (conneg/negotiate negotiation (req nil {"cookie" "lang=en"
+                                                                 "accept" "text/*"}))))))
+  (testing "none without a preference"
+    (is (nil? (:preferences (conneg/negotiate negotiation (req nil {})))))))
 
 (deftest cookie-fields
   (doseq [[s value] [["lang=da" "da"]
