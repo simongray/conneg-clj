@@ -3,31 +3,31 @@ conneg-clj
 
 [![Clojars Project](https://img.shields.io/clojars/v/dk.simongray/conneg-clj.svg)](https://clojars.org/dk.simongray/conneg-clj)
 
-This library implements proactive content negotiation by
-[RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#section-12) in Clojure
-and ClojureScript. Use it to pick the media type and the language of a
-response from the Accept and Accept-Language headers of a request, with
-the Vary header that goes with them.
+This library implements proactive content negotiation
+([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110#section-12)) in
+Clojure and ClojureScript. Use it to pick a response's media type and
+language from a request's Accept and Accept-Language headers, and to fill
+in the matching Vary header.
 
-- **Languages that fall back.** A browser that asks for da-DK gets your
-  Danish page, though you only have da. Safari sends a single language,
-  so a lone da-DK is common.
-- **Weights as RFC 9110 has them.** The most specific range decides, so
-  `text/*, text/html;q=0` rules out HTML but accepts other text. A weight
-  of 0 always rules an offer out.
-- **Vary from what the choice looked at.** A query parameter such as
-  ?format=turtle or a cookie can override a header, and the Vary header
-  names exactly the headers that counted.
-- **The conventions of Linked Data.** Answer 303 See Other for things
-  that aren't documents, and name the representations of a document in
-  Link and Content-Location headers, as in
+- **Language fallback.** A browser that asks for da-DK gets your Danish
+  page, even if you only have da. Safari sends a single language, so a
+  lone da-DK is common.
+- **Weights as RFC 9110 defines them.** The most specific matching range
+  sets an offer's weight, so `text/*, text/html;q=0` rules out HTML but
+  accepts other text. A weight of 0 always rules an offer out.
+- **A precise Vary header.** A query parameter such as ?format=turtle or
+  a cookie can override a header, and Vary names exactly the headers that
+  counted.
+- **Linked Data conventions.** Answer 303 See Other for things that
+  aren't documents, and name a document's representations in Link and
+  Content-Location headers, as in
   [Cool URIs for the Semantic Web](https://www.w3.org/TR/cooluris/).
 - **No header breaks it.** A malformed element is left out, and no
-  function throws on anything that a client sends.
+  function throws on anything a client sends.
 - **The same results everywhere.** One codebase runs on the JVM, in Node
-  and in browsers. It passes the tests of
-  [jshttp/negotiator](https://github.com/jshttp/negotiator) for Accept and
-  Accept-Language.
+  and in browsers. It passes
+  [jshttp/negotiator](https://github.com/jshttp/negotiator)'s test suite
+  for Accept and Accept-Language.
 
 > This library was developed with assistance from frontier LLMs.
 
@@ -35,22 +35,22 @@ Getting started
 ---------------
 
 The library needs Clojure 1.11+ and Java 11+. Add the latest release from
-[Clojars](https://clojars.org/dk.simongray/conneg-clj) to the `:deps` of
+[Clojars](https://clojars.org/dk.simongray/conneg-clj) to the `:deps` in
 your `deps.edn`:
 
 ```clojure
 dk.simongray/conneg-clj {:mvn/version "0.1.0"}
 ```
 
-For changes that aren't released yet, use the SHA of the latest commit on
-`master` instead. In shadow-cljs a Git dependency only works through
-`deps.edn`, so set `:deps true` in your `shadow-cljs.edn` too.
+For unreleased changes, use the SHA of the latest commit on `master`
+instead. In shadow-cljs, a Git dependency only works through `deps.edn`,
+so set `:deps true` in your `shadow-cljs.edn` too.
 
 Media types
 -----------
 
-Pick the media type of a response with `conneg/media-type`, from the
-Accept header and your offers in order of preference:
+To pick a response's media type, pass the Accept header and your offers,
+in order of preference, to `conneg/media-type`:
 
 ```clojure
 (require '[dk.simongray.conneg :as conneg])
@@ -64,35 +64,38 @@ Accept header and your offers in order of preference:
 ```
 
 When nothing is acceptable, e.g. for `image/*`, it returns nil, and you
-choose between a 406 and a default of your own. Without an Accept header,
-the client has no preference and your first offer wins.
+can answer 406 or fall back to a default of your own. Without an Accept
+header, the client has no preference, so your first offer wins.
 
 At the same weight, the more specific range wins, then the range that the
 client lists first, then the offer that comes first. So `*/*` gets your
-first offer. A range with parameters only matches an offer with the same
-values of them, e.g. `text/html;level=1` doesn't match `text/html`.
+first offer. A range with parameters only matches offers with the same
+parameter values, e.g. `text/html;level=1` doesn't match `text/html`.
 
 To pick something other than a string, pass a function that returns the
 media type of each item:
 
 ```clojure
-(conneg/media-type "text/turtle, */*;q=0.1" :type [{:type "text/html" :name :page}
-                                                   {:type "text/turtle" :name :rdf}])
+(conneg/media-type "text/turtle, */*;q=0.1"
+                   :type
+                   [{:type "text/html" :name :page}
+                    {:type "text/turtle" :name :rdf}])
 ;; => {:type "text/turtle" :name :rdf}
 ```
 
-To see the media ranges of a header as data, use `conneg/media-ranges`:
+To parse an Accept header into media ranges, use `conneg/media-ranges`:
 
 ```clojure
 (conneg/media-ranges "text/*;q=0.3, text/plain;format=flowed")
-;; => [{:type "text" :subtype "plain" :parameters {"format" "flowed"} :weight 1.0}
+;; => [{:type "text" :subtype "plain" :parameters {"format" "flowed"}
+;;      :weight 1.0}
 ;;     {:type "text" :subtype "*" :weight 0.3}]
 ```
 
 Languages
 ---------
 
-Pick the language of a response with `conneg/language`, in the same way:
+Languages work the same way, with `conneg/language`:
 
 ```clojure
 (conneg/language "da-DK, en;q=0.8" ["da" "en"])
@@ -102,10 +105,11 @@ Pick the language of a response with `conneg/language`, in the same way:
 ;; => "en"
 ```
 
-A range matches the tags that start with it, so en matches en-GB. A tag
-that no range matches can still match by falling back, as in lookup: the
-range da-DK reaches da, and zh-Hant-TW reaches zh-Hant and then zh. The
-range `*` only covers the tags that no other range matches.
+A range matches every tag that starts with it, so en matches en-GB. A tag
+that no range matches can still match a longer range by dropping the
+range's last subtags, as RFC 4647's lookup does: da-DK falls back to da,
+and zh-Hant-TW to zh-Hant and then zh. The range `*` only covers tags
+that no other range matches.
 
 The function also takes a coll of ranges, e.g. `js/navigator.languages`
 in a browser. For other ways to match language tags, see
@@ -114,9 +118,9 @@ in a browser. For other ways to match language tags, see
 Negotiating a request
 ---------------------
 
-For a whole Ring request, say what you offer in each dimension and pass
-the request to `conneg/negotiate`. Pedestal's requests work too, since
-they are Ring requests:
+To negotiate a whole Ring request, pass `conneg/negotiate` what you offer
+in each dimension (media type and language) and the request. Pedestal
+requests are Ring requests, so they work too:
 
 ```clojure
 (def negotiation
@@ -130,31 +134,33 @@ they are Ring requests:
                 :query   "lang"
                 :cookie  "lang"}})
 
-(conneg/negotiate negotiation {:uri     "/word/1"
-                               :headers {"accept"          "text/turtle, */*;q=0.1"
-                                         "accept-language" "da-DK"}})
+(conneg/negotiate negotiation
+                  {:uri     "/word/1"
+                   :headers {"accept"          "text/turtle, */*;q=0.1"
+                             "accept-language" "da-DK"}})
 ;; => {:media-type "text/turtle"
 ;;     :language   "da"
 ;;     :vary       ["Accept" "Cookie" "Accept-Language"]}
 ```
 
-A query parameter overrides the header, e.g. ?format=turtle or
-?lang=da-DK, and a cookie does so when no query parameter is there. Both
-hold an alias or what the header would hold. A cookie can be a map of its
-:name and a :read function, for a value in a format of your own.
+A query parameter such as ?format=turtle or ?lang=da-DK overrides the
+header, and so does a cookie when there's no query parameter. Each can
+hold an alias or the same kind of value as the header, e.g. turtle or
+text/turtle. For a cookie in a format of your own, make :cookie a map of
+its :name and a :read function that parses the value.
 
-The :vary of the decision lists the headers that the choice looked at,
-also when they were missing, so put it in the Vary header of your
-response. A query parameter is part of the URL, so it never goes in Vary,
-and once the cookie decides, the header that it overrides doesn't either.
-The :vary of the negotiation adds headers of your own, e.g. Origin. To
-merge a Vary value with others, use `conneg/vary-header`.
+The decision's :vary lists the headers that the choice depended on, even
+missing ones, so put it in your response's Vary header. A query parameter
+is part of the URL, so it never goes in Vary. When a cookie decides, the
+header that it overrides doesn't go in either. To add headers of your
+own, e.g. Origin, give the negotiation a :vary. To merge Vary values, use
+`conneg/vary-header`.
 
-When nothing is acceptable in a dimension with no :default, the decision
-lists the dimension under :not-acceptable. A query parameter that matches
-no offer has that effect too, e.g. ?format=xml, while a cookie that
-matches no offer counts as missing. Answer with `conneg/not-acceptable`,
-which lists the alternatives:
+When nothing is acceptable in a dimension without a :default, the
+decision lists that dimension under :not-acceptable. A query parameter
+that matches no offer, e.g. ?format=xml, counts as nothing acceptable,
+but a cookie that matches no offer counts as missing. Answer with
+`conneg/not-acceptable`, which lists the alternatives:
 
 ```clojure
 (let [request  {:uri "/word/1" :query-string "format=xml"}
@@ -163,13 +169,13 @@ which lists the alternatives:
 ;; => {:status  406
 ;;     :headers {"Content-Type" "text/html;charset=utf-8"
 ;;               "Vary"         "Cookie, Accept-Language"
-;;               "Link"         "</word/1?format=html>; rel=\"alternate\"; type=\"text/html\", ..."}
+;;               "Link"         "</word/1?format=html>; rel=\"alternate\"; ..."}
 ;;     :body    "<!DOCTYPE html>..."}
 ```
 
-The alternates are your offers, with the URL of each where its dimension
-has a query parameter. The page and the Link header list the media types
-here, since the language was fine.
+The alternates are your offers, each with a URL when its dimension has a
+query parameter. Here the page and the Link header only list media types,
+since the language was acceptable.
 
 Ring and Pedestal
 -----------------
@@ -180,8 +186,7 @@ The Ring middleware negotiates each request before your handler gets it:
 (require '[dk.simongray.conneg.ring :as conneg.ring])
 
 (defn handler
-  "Answer with the language that the client gets, in the media type that
-  it gets."
+  "Answer with the negotiated language, in the negotiated media type."
   [{::conneg/keys [decision]}]
   {:status  200
    :headers {"Content-Type" (:media-type decision)}
@@ -190,18 +195,19 @@ The Ring middleware negotiates each request before your handler gets it:
 (def app
   (conneg.ring/wrap-negotiate handler negotiation))
 
-(app {:uri "/word/1" :headers {"accept" "text/turtle" "accept-language" "da"}})
+(app {:uri     "/word/1"
+      :headers {"accept" "text/turtle" "accept-language" "da"}})
 ;; => {:status  200
 ;;     :headers {"Content-Type" "text/turtle"
 ;;               "Vary"         "Accept, Cookie, Accept-Language"}
 ;;     :body    "Language: da"}
 ```
 
-The handler finds the decision in the request, under
-:dk.simongray.conneg/decision. When nothing is acceptable, the middleware
-answers 406 itself. It adds the headers that the decision looked at to the
-Vary header of every response, next to any that the handler sets. It
-takes synchronous and asynchronous handlers.
+The decision is in the request, under :dk.simongray.conneg/decision.
+When nothing is acceptable, the middleware returns a 406 without calling
+your handler. It adds the decision's :vary to the Vary header of every
+response, keeping any that your handler sets. It works with both
+synchronous and asynchronous handlers.
 
 For Pedestal, put the interceptor in a route:
 
@@ -213,22 +219,21 @@ For Pedestal, put the interceptor in a route:
      :route-name ::word]})
 ```
 
-On enter, it puts the decision in the request, or it sets a 406 response,
-which ends the chain. On leave, it adds to the Vary header. The
+On enter, the interceptor puts the decision in the request, or sets a 406
+response that ends the chain. On leave, it adds to the Vary header. The
 interceptor is a map, so the library doesn't depend on Pedestal. Outside
 a route, pass it to `io.pedestal.interceptor/interceptor` first.
 
-Both take an option, :not-acceptable: a function of the request and the
-decision that returns a response of your own when nothing is acceptable.
+Both take a :not-acceptable option: a function of the request and the
+decision that returns your own response when nothing is acceptable.
 
 Linked Data
 -----------
 
 In [Cool URIs for the Semantic Web](https://www.w3.org/TR/cooluris/), a
-thing that isn't a document, e.g. a person, has a URI that answers 303 See
-Other with the URL of a document about it. To answer that way, use
-`conneg/see-other`, which adds the Vary of the decision when the document
-depends on it:
+request for a thing that isn't a document, e.g. a person, gets a 303 See
+Other to a document about it. To answer that way, use `conneg/see-other`,
+which adds the decision's Vary, since the location may depend on it:
 
 ```clojure
 (def thing
@@ -256,39 +261,43 @@ two more options:
 
 - :link?, for a Link header to each other representation, as Cool URIs
   advises in section 4.6
-- :content-location?, for the URL of the representation that the request
-  got, as in section 4.2. The URL must pin down each dimension, since a
-  GET on it must return the same representation.
+- :content-location?, for the URL of the chosen representation, as in
+  section 4.2. The URL has to pin down each dimension, since a GET on it
+  must return the same representation.
 
 ```clojure
 (def app
   (conneg.ring/wrap-negotiate handler negotiation {:link?             true
                                                    :content-location? true}))
 
-(:headers (app {:uri "/word/1" :headers {"accept" "text/turtle" "accept-language" "da"}}))
+(:headers (app {:request-method :get
+                :uri            "/word/1"
+                :headers        {"accept" "text/turtle" "accept-language" "da"}}))
 ;; => {"Content-Type"     "text/turtle"
 ;;     "Vary"             "Accept, Cookie, Accept-Language"
-;;     "Link"             "</word/1?format=html>; rel=\"alternate\"; type=\"text/html\", ..."
+;;     "Link"             "</word/1?format=html>; rel=\"alternate\"; ..."
 ;;     "Content-Location" "/word/1?format=turtle&lang=da"}
 ```
 
-Only a successful response gets them. The functions behind them are
-`conneg/alternates`, `conneg/link-header` and `conneg/content-location`.
+Only successful responses to GET and HEAD get these headers. To build
+them yourself, use `conneg/alternates`, `conneg/link-header` and
+`conneg/content-location`.
 
-By default, these URLs set the query parameters of the request, so they
-need a query parameter in each dimension. For URLs of your own, e.g. a
-file for each representation as in Cool URIs, give the negotiation an
-:href. It's a function of the request and a map of dimension to offer,
-which returns the URL of that representation or nil. The alternates ask
-for one dimension at a time, and Content-Location for all of them:
+By default, the library builds these URLs by setting query parameters on
+the request's URL, so each dimension needs a :query. For URLs of your
+own, e.g. a file for each representation as in Cool URIs, give the
+negotiation an :href: a function of the request and a map of dimension to
+offer that returns the URL of that representation, or nil. For an
+alternate, the map holds one dimension, and for Content-Location it holds
+all of them:
 
 ```clojure
 (def extensions
   {"text/html" "html" "application/rdf+xml" "rdf"})
 
 (defn file-href
-  "The URL of the file of the representation of the `request` with the
-  `offers`, e.g. /doc/alice.en.html."
+  "The URL of the file for the `request` with the `offers`, e.g.
+  /doc/alice.en.html."
   [{:keys [uri] :as request} {:keys [media-type language] :as offers}]
   (str uri
        (when language (str "." language))
@@ -304,18 +313,19 @@ for one dimension at a time, and Content-Location for all of them:
 Choices that the standard leaves open
 -------------------------------------
 
-- **Languages fall back.** HTTP's own scheme was basic filtering
+- **Languages fall back.** HTTP originally matched languages by basic
+  filtering
   ([RFC 4647, section 3.3.1](https://www.rfc-editor.org/rfc/rfc4647#section-3.3.1)),
   which never matches da-DK to da. RFC 9110 suggests that browsers help
-  their users add da, but Safari sends only one language. So the library also
-  falls back as lookup does (section 3.4). A fallback counts for less
-  than a range that names the tag, and more than `*`.
+  their users add da, but Safari sends only one language, so the library
+  also falls back as lookup does (section 3.4). A fallback counts for less
+  than a range that names the tag, but more than `*`.
 - **Ties.** RFC 9110 calls offers of the same weight equally preferred.
   The library breaks the tie as jshttp/negotiator does: by the more
   specific range, then the client's order, then yours.
-- **Malformed headers.** A malformed element is left out, e.g. `q=abc`
-  or `q=1.5`. When nothing in a header parses, the header counts as
-  missing. An empty header accepts nothing.
+- **Malformed headers.** The library skips malformed elements, e.g.
+  `text/html;q=abc` or `text/html;q=1.5`. When nothing in a header
+  parses, the header counts as missing. An empty header accepts nothing.
 
 Other Clojure libraries
 -----------------------
@@ -323,23 +333,26 @@ Other Clojure libraries
 Here is what each library picks from `["text/html" "application/json"
 "text/turtle"]` for Accept and from `["da" "en"]` for Accept-Language
 (with juxt/pick at commit dabc8c4, liberator 0.15.3,
-ring-middleware-accept 2.0.3 and Pedestal 0.8.2). Whatever is wrong is in
+ring-middleware-accept 2.0.3 and Pedestal 0.8.2). Wrong results are in
 bold:
 
 | Header | conneg-clj | juxt/pick | liberator | ring-middleware-accept | Pedestal |
 |---|---|---|---|---|---|
-| `application/json;q=0.2, text/*;q=0.9` | text/html | text/html | text/html | **text/turtle** | **json** |
+| `application/json;q=0.2, text/*;q=0.9` | text/html | text/html | text/html | text/turtle | **application/json** |
 | `text/html;q=0` | nothing | nothing | **text/html** | nothing | **text/html** |
 | `text/*, text/html;q=0` | text/turtle | text/turtle | **text/html** | text/turtle | **text/html** |
 | `TEXT/HTML` | text/html | text/html | **nothing** | **nothing** | **nothing** |
-| `*/*` | text/html | text/html | text/html | **text/turtle** | text/html |
+| `*/*` | text/html | text/html | text/html | text/turtle | text/html |
 | `@@@,,,;;;` | text/html | text/html | nothing | nothing | **throws** |
 | Accept-Language `da-DK` | da | **nothing** | **nothing** | da | n/a |
 | `*;q=0.5, da;q=0` | en | **da** | **nothing** | en | n/a |
 | `da;q=abc` | da | **throws** | da | da | n/a |
 
-Pedestal's negotiation is for media types only, and muuntaja's only
-matches types exactly. None of them runs in ClojureScript.
+Where offers tie, e.g. for `*/*`, ring-middleware-accept doesn't follow
+your order of preference. RFC 9110 allows that, so it isn't in bold.
+
+Pedestal only negotiates media types, and muuntaja only matches exact
+types. None of these libraries runs in ClojureScript.
 
 Not yet
 -------
@@ -347,22 +360,23 @@ Not yet
 - Accept-Encoding and Accept-Charset. RFC 9110 deprecates Accept-Charset,
   and a reverse proxy usually takes care of compression.
 - Regional siblings, e.g. en-GB for a client that asks for en-US. These
-  need the language data of CLDR.
-- A quality of the server's own for each offer, as Apache has it.
+  need CLDR's language data.
+- A server-side quality for each offer, like Apache's qs.
 
 Principles
 ----------
 
 - **Standards first.** The code follows RFC 9110 and RFC 4647 and cites
-  their sections. The tests include the examples of both RFCs and the
-  test suite of jshttp/negotiator.
+  their sections. The tests include RFC 9110's examples and
+  jshttp/negotiator's test suite.
 - **Plain data.** Offers are strings, or items of your own with a
   function that returns the media type or tag of each. Media ranges are
   maps.
 - **One codebase.** The library is written in `.cljc` and depends on
   [langtag-clj](https://github.com/simongray/langtag-clj) for language
-  ranges and [whatwg-mime](https://github.com/simongray/whatwg-mime) for
-  media types.
+  ranges, [whatwg-mime](https://github.com/simongray/whatwg-mime) for
+  media types and [whatwg-url](https://github.com/simongray/whatwg-url)
+  for query strings.
 
 Development
 -----------
@@ -377,19 +391,19 @@ clojure -M:cljs release bench && node target/bench.js # benchmarks in Node
 dev/negotiator.sh                                     # records negotiator's tests again
 ```
 
-The alias :pedestal also runs the interceptor in the chain of Pedestal
-0.8, which needs Java 17. The cases of jshttp/negotiator come from its
-own test suite at a pinned version, which `dev/negotiator.sh` runs and
-records. They keep its MIT notice.
+The :pedestal alias also runs the interceptor in Pedestal 0.8's chain,
+which needs Java 17. The jshttp/negotiator cases come from its test suite
+at a pinned version, which `dev/negotiator.sh` runs and records. They
+keep negotiator's MIT notice.
 
 The public namespaces are the root, `ring` and `pedestal`. The internal
 ones are under `impl`:
 
-- `impl.syntax`, the lists and weights of RFC 9110
+- `impl.syntax`, RFC 9110's lists and weights
 - `impl.media`, media ranges and how they match
 - `impl.language`, how language ranges match tags
 - `impl.ranking`, how the acceptable offers rank
-- `impl.request`, the query parameters and cookies of a request
+- `impl.request`, a request's query parameters and cookies
 - `impl.negotiation`, the decision for a request and its alternates
 - `impl.response`, Vary, Link and the 303 and 406 responses
 - `impl.adapter`, what the middleware and the interceptor share
