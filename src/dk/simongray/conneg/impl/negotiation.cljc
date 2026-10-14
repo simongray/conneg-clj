@@ -115,14 +115,15 @@
       (seq missing) (assoc :not-acceptable missing))))
 
 (defn alias-of
-  "The shortest of the `aliases` of the `offer`, or the first in
-  alphabetical order of the shortest, or else the offer itself."
+  "The shortest of the `offer` and its `aliases`, or the first in
+  alphabetical order of the shortest, e.g. ttl for text/turtle, but da
+  itself rather than danish."
   [aliases offer]
-  (or (->> aliases
-           (keep (fn [[k v]] (when (= offer v) k)))
-           (sort-by (juxt count identity))
-           first)
-      offer))
+  (->> aliases
+       (keep (fn [[k v]] (when (= offer v) k)))
+       (cons offer)
+       (sort-by (juxt count identity))
+       first))
 
 (defn- with-query
   "The URL of the Ring `request` with each of its query parameters in

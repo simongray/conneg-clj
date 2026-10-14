@@ -2,8 +2,8 @@
   "Media ranges from Accept (RFC 9110, section 12.5.1) and how they match
   media types.
 
-  A media range is a map as whatwg-mime parses a media type, with its
-  weight under :weight rather than as the parameter q."
+  A media range is the map that whatwg-mime returns for a media type, with
+  its weight under :weight rather than in the parameter q."
   (:require [clojure.string :as str]
             [dk.simongray.conneg.impl.ranking :as ranking]
             [dk.simongray.conneg.impl.syntax :as syntax]

@@ -146,6 +146,45 @@
   (is (str/includes? (:body (conneg/see-other "/a?b=1&c=\"2\"" {}))
                      "<a href=\"/a?b=1&amp;c=&quot;2&quot;\">")))
 
+(def translations
+  "The documents about Alice in two media types and two languages, with a
+  query parameter for each."
+  (assoc documents :language {:offers ["en" "de"] :query "lang"}))
+
+(defn rdf-href
+  "The URL of the representation of the Ring `request` with the `offers`,
+  without the language for RDF, which is the same in each language."
+  [request {:keys [media-type] :as offers}]
+  (let [media-type (or media-type (get-in request [::conneg/decision :media-type]))]
+    (some->> (cond-> offers
+               (= "application/rdf+xml" media-type) (dissoc :language))
+             not-empty
+             (conneg/query-href translations request))))
+
+;; Cool URIs, section 4.6, with the URLs of query-href, but the language
+;; only where the content depends on it
+(deftest href-by-query-href
+  (let [resource (conneg.ring/wrap-negotiate page
+                                             (assoc translations :href rdf-href)
+                                             {:link? true :content-location? true})
+        headers  (fn [accept]
+                   (:headers (resource {:request-method :get
+                                        :uri            "/doc/alice"
+                                        :headers        {"accept"          accept
+                                                         "accept-language" "en"}})))]
+    (is (= {"Content-Type"     "text/html"
+            "Vary"             "Accept, Accept-Language"
+            "Link"             (str "</doc/alice?format=rdf>; rel=\"alternate\"; type=\"application/rdf+xml\", "
+                                    "</doc/alice?lang=de>; rel=\"alternate\"; hreflang=de")
+            "Content-Location" "/doc/alice?format=html&lang=en"}
+           (headers "text/html")))
+    (testing "no language for RDF"
+      (is (= {"Content-Type"     "application/rdf+xml"
+              "Vary"             "Accept, Accept-Language"
+              "Link"             "</doc/alice?format=html>; rel=\"alternate\"; type=\"text/html\""
+              "Content-Location" "/doc/alice?format=rdf"}
+             (headers "application/rdf+xml"))))))
+
 (def extensions
   "The file extension of each media type of the documents."
   {"text/html" "html" "application/rdf+xml" "rdf"})

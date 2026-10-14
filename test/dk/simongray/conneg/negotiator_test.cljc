@@ -1,6 +1,6 @@
 (ns dk.simongray.conneg.negotiator-test
-  "The test suite of jshttp/negotiator for Accept and Accept-Language, as
-  dev/negotiator.sh records it."
+  "The test suite of jshttp/negotiator for Accept and Accept-Language, on
+  the cases that dev/negotiator.sh records."
   (:require [clojure.test :refer [deftest is]]
             [dk.simongray.conneg.impl.language :as language]
             [dk.simongray.conneg.impl.media :as media]

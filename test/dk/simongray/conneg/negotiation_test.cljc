@@ -143,7 +143,23 @@
             {:language "da"}]
            (conneg/alternates {:media-type {:offers ["text/html"] :query "f"}
                                :language   {:offers ["da"]}}
+                              {:uri "/"}))))
+  (testing "an offer that is shorter than its alias"
+    (is (= [{:language "da" :href "/?lang=da"}]
+           (conneg/alternates {:language {:offers  ["da"]
+                                          :query   "lang"
+                                          :aliases {"danish" "da"}}}
                               {:uri "/"})))))
+
+(deftest query-href
+  (is (= "/word/1?x=1&format=ttl&lang=da"
+         (conneg/query-href negotiation
+                            (req "x=1&format=html" {})
+                            {:media-type "text/turtle" :language "da"})))
+  (testing "nil when a dimension has no query parameter"
+    (is (nil? (conneg/query-href (update negotiation :language dissoc :query)
+                                 (req nil {})
+                                 {:language "da"})))))
 
 (deftest link-header
   (is (= (str "</word/1?format=html>; rel=\"alternate\"; type=\"text/html\", "

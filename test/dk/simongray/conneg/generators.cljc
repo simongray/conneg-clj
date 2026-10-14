@@ -7,7 +7,7 @@
             [clojure.test.check.generators :as gen]))
 
 (def qvalue
-  "A weight as Accept writes it, or nil for none."
+  "The text of a weight in Accept, e.g. 0.5, or nil for none."
   (gen/one-of [(gen/return nil)
                (gen/elements ["0" "0.1" "0.5" "0.9" "1" "1.0" "0.001" "0.123"])]))
 

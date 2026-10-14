@@ -310,6 +310,12 @@ all of them:
 ;;     {:media-type "application/rdf+xml" :href "/doc/alice.rdf"}]
 ```
 
+To change only some of the default URLs, call `conneg/query-href` from
+your :href, and return nil for a representation that you don't want to
+list. The middleware and the interceptor pass :href the request with the
+decision in it, e.g. to leave out the language for RDF, which is the same
+in every language.
+
 Choices that the standard leaves open
 -------------------------------------
 

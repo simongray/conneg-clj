@@ -27,8 +27,8 @@
       ;;      :parameters {\"format\" \"flowed\"} :weight 1.0}
       ;;     {:type \"text\" :subtype \"*\" :weight 0.3}]
 
-  A range is a map as whatwg-mime parses a media type, with its weight
-  under :weight. Ranges that don't follow the grammar, e.g. with q=abc,
+  A range is the map that whatwg-mime returns for a media type, with its
+  weight under :weight. Ranges that don't follow the grammar, e.g. with q=abc,
   or that repeat an earlier one are left out."
   [x]
   (media/media-ranges x))
@@ -119,7 +119,9 @@
   - :vary, other fields that your response depends on, e.g. Origin
   - :href, a function of the request and a map of dimension to offer that
     returns the URL of that representation, or nil, for alternates and
-    content-location. By default the URL sets the query parameters.
+    content-location. By default the URL is the one of query-href. The
+    middleware and the interceptor pass the request with the decision
+    under :dk.simongray.conneg/decision.
 
   The decision holds the offer chosen in each dimension. When none is
   acceptable and the dimension has no :default, its :not-acceptable set
@@ -143,11 +145,28 @@
       ;;      :href       \"/word/1?lang=da&format=turtle\"}]
 
   An alternate has an :href when it has a URL: by the :href function of
-  the `negotiation`, or else when its dimension has a query parameter, the
-  URL of the request with the parameter set to the shortest alias of the
-  offer, or to the offer itself."
+  the `negotiation`, or else by query-href when its dimension has a query
+  parameter."
   [negotiation request]
   (negotiation/alternates negotiation request))
+
+(defn query-href
+  "The URL of the Ring `request` with the query parameters of the
+  `negotiation` set to the `offers`, a map of dimension to offer, or nil
+  when one of those dimensions has no query parameter.
+
+      (query-href {:media-type {:offers  [\"text/html\" \"text/turtle\"]
+                                :query   \"format\"
+                                :aliases {\"turtle\" \"text/turtle\"}}}
+                  {:uri \"/word/1\" :query-string \"x=1\"}
+                  {:media-type \"text/turtle\"})
+      ;; => \"/word/1?x=1&format=turtle\"
+
+  Each parameter holds the offer or its shortest alias. Without an :href,
+  alternates and content-location use these URLs, so an :href function can
+  call this to change only some of them."
+  [negotiation request offers]
+  (negotiation/query-href negotiation request offers))
 
 ;; RFC 8288, section 3, with the alternate relation of RFC 9110, section
 ;; 15.4.1
