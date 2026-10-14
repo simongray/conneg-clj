@@ -103,4 +103,10 @@
         (is (= {:status 406 :headers {"Vary" "Accept, Cookie, Accept-Language"}}
                (:response (run-interceptor interceptor
                                            handler
-                                           {:uri "/" :headers {"accept" "image/png"}}))))))))
+                                           {:uri "/" :headers {"accept" "image/png"}}))))))
+    (testing "a request that lost its decision"
+      (let [{:keys [leave]} (conneg.pedestal/negotiate negotiation {:link?             true
+                                                                    :content-location? true})]
+        (is (= {:status 200}
+               (:response (leave {:request  {:request-method :get :uri "/"}
+                                  :response {:status 200}}))))))))

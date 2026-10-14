@@ -101,7 +101,16 @@
         (let [negotiation (assoc-in negotiation [:language :cookie :read]
                                     #(throw (ex-info "Can't read" {:s %})))]
           (is (= "da" (:language (conneg/negotiate negotiation
-                                                   (req nil {"cookie" "languages=x"}))))))))))
+                                                   (req nil {"cookie" "languages=x"})))))))
+      (testing "that returns neither text nor a coll"
+        (doseq [read [keyword count]]
+          (let [negotiation (assoc-in negotiation [:language :cookie :read] read)]
+            (is (= "da" (:language (conneg/negotiate negotiation
+                                                     (req nil {"cookie" "languages=en"}))))))))
+      (testing "that returns a coll"
+        (let [negotiation (assoc-in negotiation [:language :cookie :read] vector)]
+          (is (= "en" (:language (conneg/negotiate negotiation
+                                                   (req nil {"cookie" "languages=en"}))))))))))
 
 (deftest cookie-fields
   (doseq [[s value] [["lang=da" "da"]
@@ -142,7 +151,9 @@
          (conneg/link-header [{:media-type "text/html;charset=utf-8" :href "/word/1?format=html"}
                               {:media-type "text/turtle"}
                               {:language "da" :href "/word/1?lang=da"}])))
-  (is (nil? (conneg/link-header [{:language "da"}]))))
+  (is (nil? (conneg/link-header [{:language "da"}])))
+  (testing "no type for an offer that isn't a media type"
+    (is (= "</x>; rel=\"alternate\"" (conneg/link-header [{:media-type "html" :href "/x"}])))))
 
 (deftest not-acceptable
   (let [request  (req "format=xml" {"accept-language" "da"})

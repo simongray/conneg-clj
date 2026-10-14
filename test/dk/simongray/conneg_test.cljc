@@ -73,7 +73,10 @@
     (is (= [{:type "text" :subtype "html" :weight 1.0}
             {:type "*" :subtype "*" :weight 0.1}]
            (conneg/media-ranges ["*/*;q=0.1" "text/html"])
-           (conneg/media-ranges (conneg/media-ranges "text/html, */*;q=0.1"))))))
+           (conneg/media-ranges (conneg/media-ranges "text/html, */*;q=0.1")))))
+  (testing "maps in lower case"
+    (is (= [{:type "text" :subtype "html" :weight 1.0}]
+           (conneg/media-ranges [{:type "Text" :subtype "HTML"}])))))
 
 (deftest language
   (doseq [[accept-language expected] [["da-DK" "da"]

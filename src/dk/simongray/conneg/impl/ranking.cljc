@@ -19,7 +19,8 @@
   [(- weight) (- specificity) index (- (or closeness 0))])
 
 (defn ranked
-  "The items of `coll` that `weigh` gives a weight above 0, best first.
+  "The items of `coll` whose match by `weigh` has a weight above 0, best
+  first.
 
   The `weigh` function returns the match of an item, or nil when no range
   matches it. Items with the same rank stay in the order of `coll`."

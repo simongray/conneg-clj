@@ -18,7 +18,7 @@
   [:media-type :language])
 
 (def fields
-  "The request field of each dimension, as Vary writes it."
+  "The name of each dimension's request field, as it appears in Vary."
   {:media-type "Accept"
    :language   "Accept-Language"})
 
@@ -37,10 +37,11 @@
     :language   (language/priority-list x)))
 
 (defn override
-  "The offer of the `dimension` d that the query parameter or cookie value
-  `x` asks for, by an alias or as its field would, or nil.
+  "The offer that the query parameter or cookie value `x` asks for in the
+  dimension `d`, by the offers and aliases in `dimension`, or nil.
 
-  Unlike a field, an `x` that doesn't parse accepts nothing, e.g. xml."
+  The `x` holds an alias or what the field would hold. Unlike a field, an
+  `x` that doesn't parse accepts nothing, e.g. xml."
   [d {:keys [offers aliases] :as dimension} x]
   (let [aliased (get aliases x)]
     (cond
@@ -49,14 +50,17 @@
 
 (defn cookie-value
   "The value of the `cookie` of the Ring `request`, read by the :read of
-  the cookie, or nil when it's missing or the :read throws."
+  the cookie, or nil when it's missing or the :read throws or returns
+  neither text nor a coll."
   [request cookie]
   (let [{:keys [name read] :or {read identity}} (if (map? cookie)
                                                   cookie
                                                   {:name cookie})]
     (when-let [s (request/cookie request name)]
       (try
-        (read s)
+        (let [x (read s)]
+          (when (or (string? x) (coll? x))
+            x))
         (catch #?(:clj Exception :cljs :default) _
           nil)))))
 
@@ -64,11 +68,12 @@
 ;; at, also when they were missing. A query parameter is part of the URL,
 ;; so it never goes in Vary.
 (defn decide
-  "The choice in the dimension `d` of the `dimension` for the Ring
-  `request`, or nil, and the fields that it looked at.
+  "The choice for the Ring `request` in the dimension `d`, by the offers
+  and overrides in `dimension`, and the fields that it depended on.
 
-  A query parameter decides first, then the cookie and then the field. A
-  cookie whose value matches no offer counts as missing."
+  A query parameter decides first, then the cookie and then the field. The
+  choice is nil when nothing is acceptable, and a cookie whose value
+  matches no offer counts as missing."
   [d {:keys [offers query cookie] :as dimension} request]
   (let [field        (fields d)
         query-value  (some->> query (request/query-param request) not-empty)

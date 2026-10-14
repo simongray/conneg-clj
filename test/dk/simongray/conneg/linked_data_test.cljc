@@ -59,8 +59,9 @@
     (is (= {"Content-Type"     "application/rdf+xml"
             "Vary"             "Accept"
             "Content-Location" "/doc/alice?format=rdf"}
-           (:headers (document {:uri     "/doc/alice"
-                                :headers {"accept" "application/rdf+xml"}}))))))
+           (:headers (document {:request-method :get
+                                :uri            "/doc/alice"
+                                :headers        {"accept" "application/rdf+xml"}}))))))
 
 ;; Cool URIs, section 2.1, with the Vary of the errata
 (deftest content-location-of-both-dimensions
@@ -70,9 +71,10 @@
     (is (= {"Content-Type"     "text/html"
             "Vary"             "Accept, Accept-Language"
             "Content-Location" "/people/alice?format=html&lang=en"}
-           (:headers (resource {:uri     "/people/alice"
-                                :headers {"accept"          "text/html, application/xhtml+xml"
-                                          "accept-language" "en, de"}}))))
+           (:headers (resource {:request-method :get
+                                :uri            "/people/alice"
+                                :headers        {"accept"          "text/html, application/xhtml+xml"
+                                                 "accept-language" "en, de"}}))))
     (testing "only when a query parameter pins down each dimension"
       (is (nil? (conneg/content-location (assoc-in negotiation [:language :query] nil)
                                          {:uri "/people/alice"}
@@ -86,9 +88,9 @@
                       #(assoc-in (page %) [:headers "content-location"] "/alice.html")
                       negotiation
                       {:content-location? true})]
-        (is (= "/alice.html" (get-in (resource {:uri "/people/alice"})
+        (is (= "/alice.html" (get-in (resource {:request-method :get :uri "/people/alice"})
                                      [:headers "content-location"])))
-        (is (nil? (get-in (resource {:uri "/people/alice"})
+        (is (nil? (get-in (resource {:request-method :get :uri "/people/alice"})
                           [:headers "Content-Location"])))))))
 
 ;; Cool URIs, section 4.6, as a Link header (RFC 8288)
@@ -96,26 +98,43 @@
   (let [document (conneg.ring/wrap-negotiate page documents {:link? true})]
     (testing "the other representations"
       (is (= "</doc/alice?format=rdf>; rel=\"alternate\"; type=\"application/rdf+xml\""
-             (get-in (document {:uri "/doc/alice" :headers {"accept" "text/html"}})
+             (get-in (document {:request-method :get
+                                :uri            "/doc/alice"
+                                :headers        {"accept" "text/html"}})
                      [:headers "Link"]))))
     (testing "after a Link of the handler"
-      (let [document (conneg.ring/wrap-negotiate
-                      #(assoc-in (page %) [:headers "Link"] "</>; rel=\"start\"")
-                      documents
-                      {:link? true})]
-        (is (= (str "</>; rel=\"start\", "
-                    "</doc/alice?format=rdf>; rel=\"alternate\"; type=\"application/rdf+xml\"")
-               (get-in (document {:uri "/doc/alice"}) [:headers "Link"])))))
+      (doseq [[link expected] [["</>; rel=\"start\"" "</>; rel=\"start\", "]
+                               ["" ""]]]
+        (let [document (conneg.ring/wrap-negotiate
+                        #(assoc-in (page %) [:headers "Link"] link)
+                        documents
+                        {:link? true})]
+          (is (= (str expected
+                      "</doc/alice?format=rdf>; rel=\"alternate\"; type=\"application/rdf+xml\"")
+                 (get-in (document {:request-method :get :uri "/doc/alice"})
+                         [:headers "Link"]))
+              link))))
     (testing "only for a success"
       (let [missing (conneg.ring/wrap-negotiate (constantly {:status 404})
                                                 documents
                                                 {:link? true :content-location? true})]
-        (is (= {"Vary" "Accept"} (:headers (missing {:uri "/doc/bob"}))))))))
+        (is (= {"Vary" "Accept"} (:headers (missing {:request-method :get
+                                                     :uri            "/doc/bob"}))))))
+    (testing "only for GET and HEAD"
+      (is (some? (get-in (document {:request-method :head :uri "/doc/alice"})
+                         [:headers "Link"])))
+      (let [create (conneg.ring/wrap-negotiate (constantly {:status 201 :body "Created"})
+                                               documents
+                                               {:link? true :content-location? true})]
+        (is (= {"Vary" "Accept"} (:headers (create {:request-method :post
+                                                    :uri            "/doc/alice"}))))))))
 
 (deftest pedestal-options
   (let [{:keys [enter leave]} (conneg.pedestal/negotiate documents {:link?             true
                                                                     :content-location? true})
-        ctx   (enter {:request {:uri "/doc/alice" :headers {"accept" "application/rdf+xml"}}})
+        ctx   (enter {:request {:request-method :get
+                                :uri            "/doc/alice"
+                                :headers        {"accept" "application/rdf+xml"}}})
         ctx   (leave (assoc ctx :response (page (:request ctx))))]
     (is (= {"Content-Type"     "application/rdf+xml"
             "Vary"             "Accept"
@@ -151,9 +170,10 @@
     (is (= {"Content-Type"     "text/html"
             "Vary"             "Accept, Accept-Language"
             "Content-Location" "http://www.example.com/people/alice.en.html"}
-           (:headers (resource {:uri     "/people/alice"
-                                :headers {"accept"          "text/html, application/xhtml+xml"
-                                          "accept-language" "en, de"}}))))))
+           (:headers (resource {:request-method :get
+                                :uri            "/people/alice"
+                                :headers        {"accept"          "text/html, application/xhtml+xml"
+                                                 "accept-language" "en, de"}}))))))
 
 ;; Cool URIs, sections 4.2 and 4.6
 (deftest links-to-files

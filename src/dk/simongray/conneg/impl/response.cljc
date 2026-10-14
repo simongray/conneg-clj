@@ -14,13 +14,7 @@
   (let [names (remove str/blank? (map str/trim names))]
     (if (some #{"*"} names)
       ["*"]
-      (first (reduce (fn [[kept seen] name]
-                       (let [k (syntax/lower name)]
-                         (if (seen k)
-                           [kept seen]
-                           [(conj kept name) (conj seen k)])))
-                     [[] #{}]
-                     names)))))
+      (syntax/distinct-by syntax/lower names))))
 
 (defn vary-header
   "The Vary value `s` with the field `names` added, or nil when it has
@@ -62,7 +56,7 @@
   [response s]
   (let [[value k] (header response "Link")]
     (cond-> response
-      s (assoc-in [:headers k] (if value (str value ", " s) s)))))
+      s (assoc-in [:headers k] (if (str/blank? value) s (str value ", " s))))))
 
 (defn with-default
   "The Ring `response` with the header `name` set to `value`, unless it has
@@ -79,7 +73,8 @@
   [{:keys [href media-type language] :as alternate}]
   (when href
     (str "<" href ">; rel=\"alternate\""
-         (when media-type (str "; type=\"" (mime/essence media-type) "\""))
+         (when-let [essence (some-> media-type mime/essence)]
+           (str "; type=\"" essence "\""))
          (when language (str "; hreflang=" language)))))
 
 (defn link-header

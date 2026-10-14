@@ -42,18 +42,9 @@
   (cond
     (string? x) (element (str/trim x))
     (map? x)    (when (and (string? (:type x)) (string? (:subtype x)))
-                  (merge {:weight 1.0} x))))
-
-(defn distinct-ranges
-  "The media `ranges` without those that repeat an earlier one."
-  [ranges]
-  (first (reduce (fn [[kept seen] range]
-                   (let [k (dissoc range :weight)]
-                     (if (seen k)
-                       [kept seen]
-                       [(conj kept range) (conj seen k)])))
-                 [[] #{}]
-                 ranges)))
+                  (-> (merge {:weight 1.0} x)
+                      (update :type syntax/lower)
+                      (update :subtype syntax/lower)))))
 
 (defn media-ranges
   "The media ranges of `x`, an Accept value or a coll of ranges, in order
@@ -62,7 +53,7 @@
   (->> (if (string? x)
          (keep element (syntax/elements x))
          (keep entry x))
-       distinct-ranges
+       (syntax/distinct-by #(dissoc % :weight))
        (sort-by :weight >)
        vec))
 
@@ -126,8 +117,8 @@
                         ranges)))
 
 (defn ranked
-  "The items of `coll` whose media type, which `f` returns, the Accept
-  value `x` accepts, best first."
+  "The items of `coll` that the Accept value `x` accepts, best first, by
+  the media type that `f` returns for each."
   [x f coll]
   (let [ranges (preferences x)]
     (ranking/ranked (fn [item]

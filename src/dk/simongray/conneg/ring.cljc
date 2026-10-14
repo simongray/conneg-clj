@@ -20,9 +20,10 @@
     own. By default it's conneg/not-acceptable with the alternates of the
     request.
   - :link?, to add a Link to each other representation to a successful
-    response, with rel=\"alternate\"
+    response to GET or HEAD, with rel=\"alternate\"
   - :content-location?, to add the URL of the chosen representation to a
-    successful response, when a query parameter pins down each dimension
+    successful response to GET or HEAD, when a query parameter or the
+    :href of the negotiation pins down each dimension
 
   It takes a synchronous or an asynchronous handler."
   ([handler negotiation]

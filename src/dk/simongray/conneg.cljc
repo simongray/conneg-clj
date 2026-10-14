@@ -23,8 +23,8 @@
   of weight.
 
       (media-ranges \"text/*;q=0.3, text/plain;format=flowed\")
-      ;; => [{:type \"text\" :subtype \"plain\" :parameters {\"format\" \"flowed\"}
-      ;;      :weight 1.0}
+      ;; => [{:type \"text\" :subtype \"plain\"
+      ;;      :parameters {\"format\" \"flowed\"} :weight 1.0}
       ;;     {:type \"text\" :subtype \"*\" :weight 0.3}]
 
   A range is a map as whatwg-mime parses a media type, with its weight
@@ -137,8 +137,10 @@
                                 :query   \"format\"
                                 :aliases {\"turtle\" \"text/turtle\"}}}
                   {:uri \"/word/1\" :query-string \"lang=da\"})
-      ;; => [{:media-type \"text/html\" :href \"/word/1?lang=da&format=text%2Fhtml\"}
-      ;;     {:media-type \"text/turtle\" :href \"/word/1?lang=da&format=turtle\"}]
+      ;; => [{:media-type \"text/html\"
+      ;;      :href       \"/word/1?lang=da&format=text%2Fhtml\"}
+      ;;     {:media-type \"text/turtle\"
+      ;;      :href       \"/word/1?lang=da&format=turtle\"}]
 
   An alternate has an :href when it has a URL: by the :href function of
   the `negotiation`, or else when its dimension has a query parameter, the
@@ -153,10 +155,12 @@
   "The Link value that lists the `alternates` with an :href, or nil when
   none has one.
 
-      (link-header [{:media-type \"text/turtle\" :href \"/word/1?format=turtle\"}
-                    {:language \"da\" :href \"/word/1?lang=da\"}])
-      ;; => \"</word/1?format=turtle>; rel=\\\"alternate\\\"; type=\\\"text/turtle\\\",
-      ;;     </word/1?lang=da>; rel=\\\"alternate\\\"; hreflang=da\""
+      (link-header
+       [{:media-type \"text/turtle\" :href \"/word/1?format=turtle\"}
+        {:language \"da\" :href \"/word/1?lang=da\"}])
+      ;; => \"</word/1?format=turtle>; rel=\\\"alternate\\\";
+      ;;     type=\\\"text/turtle\\\", </word/1?lang=da>;
+      ;;     rel=\\\"alternate\\\"; hreflang=da\""
   [alternates]
   (response/link-header alternates))
 

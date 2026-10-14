@@ -87,8 +87,8 @@
           (matches priority-list tag)))
 
 (defn ranked
-  "The items of `coll` whose tag, which `f` returns, the Accept-Language
-  value `x` accepts, best first."
+  "The items of `coll` that the Accept-Language value `x` accepts, best
+  first, by the tag that `f` returns for each."
   [x f coll]
   (let [priority-list (preferences x)]
     (ranking/ranked (fn [item]

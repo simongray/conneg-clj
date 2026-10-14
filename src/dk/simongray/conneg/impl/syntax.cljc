@@ -35,6 +35,17 @@
             (recur (inc i) (inc i) false
                    (conj acc (str/trim (subs s start i))))))))))
 
+(defn distinct-by
+  "The `xs`, keeping only the first of each key that `f` returns."
+  [f xs]
+  (first (reduce (fn [[kept seen] x]
+                   (let [k (f x)]
+                     (if (contains? seen k)
+                       [kept seen]
+                       [(conj kept x) (conj seen k)])))
+                 [[] #{}]
+                 xs)))
+
 (defn empty-list?
   "Whether `x`, a field value or a coll of its elements, is a list with no
   elements, e.g. \"\" or \" , \"."
